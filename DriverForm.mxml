@@ -1,0 +1,420 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Screen for selecting a driver. -->
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark"
+		 xmlns:mx="library://ns.adobe.com/flex/mx"  
+		 xmlns:fc="com.adobe.flex.extras.controls.*"
+		 xmlns:entity="net.insolutions.rtquote.entity.*"
+		 width="100%" height="100%" 
+		 gap="20" horizontalAlign="left"
+		 creationComplete="complete(event)">
+
+	<fx:Declarations>
+
+		<entity:Driver id="driver"
+			state="{cbState.value}" licensenumber="{licenseNumberInput.text}" 
+			firstname="{firstNameInput.text}" lastname="{lastNameInput.text}"
+			gender="{rbGender.selectedValue}" maritalstatus="{rbMaritalStatus.selectedValue}"
+			previnsured="{int(rbInsured.selectedValue)}" ticketsaccidents="{int(rbTickets.selectedValue)}"
+			isdriver="{int(rbDriver.selectedValue)}" relationship="{rbSpouse.selectedValue}"/>
+
+		<mx:DateValidator id="dateValidator"
+				source="{dateInputMask}" inputFormat="DD/MM/YYYY"
+				triggerEvent="valueCommit" property="fullText" required="true"
+				valid="error1=false;" invalid="error1=true" />
+
+		<!--mx:DateFormatter id="dateFormatter" formatString="DD/MM/YYYY" /-->
+
+		<mx:StringValidator id="firstNameValidator" source="{firstNameInput}" 
+				triggerEvent="valueCommit" property="text" required="true"
+				minLength="3" maxLength="30"
+				valid="error2=false;" invalid="error2=true" />
+
+		<mx:StringValidator id="lastNameValidator" source="{lastNameInput}"
+				triggerEvent="valueCommit" property="text" required="true"
+				minLength="3" maxLength="30"
+				valid="error3=false;" invalid="error3=true" />
+
+		<mx:StringValidator id="licenseNumberValidator" source="{licenseNumberInput}"
+				triggerEvent="valueCommit" property="text" required="true"
+				minLength="4" maxLength="14"
+				valid="error4=false;" invalid="error4=true" />
+
+		<mx:StringValidator id="cbStateValidator" source="{cbState}" 
+				triggerEvent="valueCommit" property="value" required="true"
+				valid="error5=false;" invalid="error5=true" />
+
+	</fx:Declarations>
+
+	<fx:Script>
+		<![CDATA[
+			import clear.utils.DataCollectionUtils;
+			
+			import flashx.textLayout.elements.TextFlow;
+			
+			import mx.controls.Alert;
+			import mx.resources.ResourceManager;
+			import mx.validators.Validator;
+			
+			import net.insolutions.rtquote.collections.IncidentClaimCollection;
+			import net.insolutions.rtquote.entity.*;
+			import net.insolutions.rtquote.events.*;
+			import net.insolutions.rtquote.models.WizardModel;
+			import net.insolutions.rtquote.utils.Utils;
+			
+			import spark.utils.TextFlowUtil;
+			
+			[Bindable]
+            private var validatorArr:Array;
+
+			[Bindable]
+			private var error1:Boolean=true;
+			[Bindable]
+			private var error2:Boolean=true;
+			[Bindable]
+			private var error3:Boolean=true;
+			[Bindable]
+			private var error4:Boolean=true;
+			[Bindable]
+			private var error5:Boolean=true;
+
+			[Bindable]
+			public var textFlowInsured:TextFlow;
+
+			public function setTextAreaInsured(event:Event = null):void {
+				textFlowInsured = TextFlowUtil.importFromString(
+					ResourceManager.getInstance().getString('DriverForm','insuredHtml'));
+			}
+
+			private function complete(event:*):void {
+				resourceManager.addEventListener(Event.CHANGE, setTextAreaInsured);
+				if (!hasEventListener(MyCustomEvent.VALIDATE)) 
+				    addEventListener(MyCustomEvent.VALIDATE, validateFormHandler);
+				//if (!hasEventListener(MyCustomEvent.ADD_INCIDENT_CLAIM)) 
+					//addEventListener(MyCustomEvent.ADD_INCIDENT_CLAIM, addIncidentClaim);
+
+				setTextAreaInsured();
+
+               	validatorArr = new Array();
+				validatorArr.push(dateValidator);
+				validatorArr.push(firstNameValidator);
+				validatorArr.push(lastNameValidator);
+				validatorArr.push(licenseNumberValidator);
+				validatorArr.push(cbStateValidator);
+
+				reset();
+			}
+
+			public function reset(): void {
+				if (parentDocument.parentDocument.listDrivers != null)
+					parentDocument.parentDocument.listDrivers.selectedIndex = -1;
+				
+				driver = new Driver();
+				//driver.state = '';
+				//driver.licensenumber = '';
+				driver.dob = null;
+				dateInputMask.text = '';
+				driver.gender = "m";
+				driver.maritalstatus = "married";
+				driver.relationship = "spouse";
+				
+				cbState.selectedIndex = -1;
+				
+				setErrors();
+				dispatchEvent(new MyCustomEvent(MyCustomEvent.VALIDATE));
+			}
+
+			public function onAdd():void {
+				if (parentDocument.parentDocument.listApplicants.selectedIndex == -1)
+					return;
+
+				var d:Driver = new Driver();
+		
+				// For the purpose of PK-FK linking in batch transaction 
+				// you should initialize new autoincrement values with "locally" 
+				// unique values: 0, -1, -2, etc. 		
+				d.id = DataCollectionUtils.getLocalStringIdentity(parentDocument.parentDocument.driverList, "id");
+
+				d.applicant = parentDocument.parentDocument.listApplicants.dataProvider.getItemAt(parentDocument.parentDocument.listApplicants.selectedIndex) as Applicant;
+
+				d.state = cbState.value as String;
+				d.licensenumber = licenseNumberInput.text;
+				d.dob = driver.dob;
+				d.firstname = firstNameInput.text;
+				d.lastname = lastNameInput.text;
+				d.gender = rbGender.selectedValue as String;
+				d.maritalstatus = rbMaritalStatus.selectedValue as String;
+				d.previnsured = int(rbInsured.selectedValue as String);
+				d.isdriver = int(rbDriver.selectedValue as String);
+				d.relationship = rbSpouse.selectedValue as String;
+				d.ticketsaccidents = int(rbTickets.selectedValue as String);
+
+				cbState.selectedIndex = 0;
+				d.state = cbState.value as String;
+				d.licensenumber = Utils.getTextInputValue(licenseNumberInput, "T1234");
+
+				d.firstname = Utils.getTextInputValue(firstNameInput, "Aston");
+				d.lastname = Utils.getTextInputValue(lastNameInput, "Martin");
+				
+				parentDocument.parentDocument.incidentClaimList = d.incidentClaims = new IncidentClaimCollection();
+				
+				parentDocument.parentDocument.driverList.addItem(d);
+				driver = d;
+				parentDocument.parentDocument.listDrivers.selectedIndex = parentDocument.parentDocument.driverList.length - 1;
+			}
+				
+			public function onRemove(index:int):void {
+				var doReset:Boolean = false;
+				if (index == parentDocument.parentDocument.listDrivers.selectedIndex)
+					doReset = true;
+				
+				parentDocument.parentDocument.driverList.removeItemAt(index);
+
+				if (doReset)
+					reset();
+			}
+				
+			public function onSelect(d:Driver): void {
+				if (parentDocument.parentDocument.listApplicants.selectedIndex == -1)
+					return;
+					
+				driver = d;
+
+				if (d.state != null && d.state != "")
+				  Utils.selectComboItemByValue(cbState, d.state);
+				else
+				  cbState.selectedIndex = -1;
+
+				licenseNumberInput.text = d.licensenumber;
+
+				dateInputMask.text = convertDateToString(d.dob);
+				dateInputMask.validateNow();
+
+				firstNameInput.text = d.firstname;
+				lastNameInput.text = d.lastname;
+				rbGender.selectedValue = d.gender;
+				rbMaritalStatus.selectedValue = d.maritalstatus;
+				rbInsured.selectedValue = d.previnsured;
+				rbDriver.selectedValue = d.isdriver;
+				rbSpouse.selectedValue = d.relationship;
+				rbTickets.selectedValue = d.ticketsaccidents;
+
+				parentDocument.parentDocument.incidentClaimList = d.incidentClaims;
+
+				//callLater(checkIncidentClaim);
+				//dispatchEvent(new MyCustomEvent(MyCustomEvent.ADD_INCIDENT_CLAIM));
+				dispatchEvent(new MyCustomEvent(MyCustomEvent.VALIDATE));
+			}
+
+			private function setErrors():void {
+				error1 = true; error2 = true; error3 = true; error4 = true; error5 = true;
+			}
+			
+			private function validateForm():void {
+				if (!error1)
+					driver.dob=convertStringToDate(dateInputMask.fullText);
+
+				if (parentDocument.parentDocument.listApplicants.selectedIndex == -1 ||
+				    (error1 || error2 || error3 || error4 || error5)) {
+					parentDocument.parentDocument.imgAddDriver.enabled = false;
+					parentDocument.parentDocument.imgAddDriver.alpha = 0.3;
+				} else {
+					parentDocument.parentDocument.imgAddDriver.enabled = true;
+					parentDocument.parentDocument.imgAddDriver.alpha = 1;
+//					setErrors();
+				}
+				
+				//parentDocument.parentDocument.imgAddDriver.enabled = true;
+				//parentDocument.parentDocument.imgAddDriver.alpha = 1;
+				
+			}
+
+			private function bindDate(dt:Date):String {
+
+				var d:String = "";
+				dt = new Date();
+				if (dt != null && dt.toString() != "null" && dt.toString() != "Invalid Date") {
+				    d = "0" + dt.getDate() + "/0" + (dt.getMonth() + 1) + "/" + dt.getFullYear();
+
+				    trace("date formatted " + d);
+				} else
+				    trace("date empty " + d);
+
+				return d;
+			}
+
+			private function convertStringToDate(dtT:String):Date {
+				var dt:Date = new Date(dtT);
+
+				if (dateValidator.inputFormat == "DD/MM/YYYY")
+					dt = new Date(dtT.substr(6, 4), int(dtT.substr(3, 2)) - 1, dtT.substr(0, 2));
+
+				return dt;
+			}
+
+			private function convertDateToString(dt:Date):String {
+				if (!dt)
+					return '';
+				
+				var dtT:String;
+				var dateT:String;
+				if (dateValidator.inputFormat == "DD/MM/YYYY") {
+					dateT = dt.getDate() < 10 ? "0" + dt.getDate().toString() : dt.getDate().toString();
+					dtT = dateT;
+					dateT = (dt.getMonth() + 1) < 10 ? "0" + (dt.getMonth() + 1).toString() : (dt.getMonth() + 1).toString();
+					dtT += dateT;
+					dtT += dt.getFullYear().toString();
+				}
+
+				return dtT;
+			}
+
+			import mx.events.ValidationResultEvent;
+
+			public function validateFormHandler(event:* = null):void {
+			    Validator.validateAll(validatorArr);
+			    validateForm();
+
+				//Alert.show("error1=" + error1 + ",error2=" + error2 +",error3=" + error3 +",error4=" + error4);
+
+			}
+
+			public function addIncidentClaim():void {
+				if (rbTickets.selectedValue == 0)
+					return;
+				
+				var claim:IncidentClaim;
+				var found:Boolean = false;
+				for (var i:int; i < parentDocument.parentDocument.incidentClaimList.length; i++) {
+					claim = parentDocument.parentDocument.incidentClaimList[i];
+					if (!claim.incidentDate || !claim.incidentType) {
+						if (found) { // bypass the first one
+							parentDocument.parentDocument.incidentClaimList.removeItemAt(i);
+						}
+						found = true;
+					}
+				}
+				
+				if (!found && parentDocument.parentDocument.listDrivers.selectedIndex != -1) {
+					claim = new IncidentClaim();
+					claim.id = DataCollectionUtils.getLocalStringIdentity(parentDocument.parentDocument.incidentClaimList, "id");
+					claim.driver = parentDocument.parentDocument.listDrivers.dataProvider.getItemAt(parentDocument.parentDocument.listDrivers.selectedIndex) as Driver;
+					claim.incidentDate = null;
+					claim.incidentType = null;
+					parentDocument.parentDocument.incidentClaimList.addItem(claim);
+				}
+			}
+			
+			import mx.collections.ItemResponder;
+			import mx.collections.errors.ItemPendingError;
+			import mx.rpc.events.ResultEvent;
+			import mx.rpc.events.FaultEvent;
+			
+			private function checkIncidentClaim():void {
+				try {
+					var claim:IncidentClaim;
+					claim = parentDocument.parentDocument.incidentClaimList.getItemAt(0);
+				} catch (ipe:ItemPendingError) {
+					// Otherwise, let's add responder...			 
+					ipe.addResponder(
+						new ItemResponder(
+							resultHandler,
+							faultHandler,
+							{collectionName:"incidentClaimList"}
+						)
+					);
+				}
+			}
+			
+			private function resultHandler(event:ResultEvent, token:Object=null):void {
+				addIncidentClaim();
+			}
+			
+			private function faultHandler(event:FaultEvent, token:Object=null):void {
+				Alert.show(token.collectionName + " --- " + event.fault.faultString);						
+			}			
+			
+		]]>
+	</fx:Script>
+	
+	<mx:Form id="myform" borderStyle="none" dropShadowVisible="false" indicatorGap="6">
+		<!--creationComplete="initForm(myform)"-->
+		<mx:FormItem label="{resourceManager.getString('DriverForm','license')}:">
+		    <mx:HBox>
+			<mx:TextInput id="licenseNumberInput" width="{firstNameInput.width - cbState.width - 8}"
+				text="{driver.licensenumber}" maxChars="16" focusOut="validateForm()"/>
+			<mx:ComboBox id="cbState" dataProvider="{WizardModel.statesArray}" 
+				rowCount="10" change="validateForm()" prompt=""/>
+		    </mx:HBox>
+		</mx:FormItem>
+		
+		<mx:FormItem label="{resourceManager.getString('DriverForm','dateofBirth')}:" 
+			direction="horizontal">
+			<fc:MaskedTextInput id="dateInputMask" inputMask="DD/MM/YYYY"
+				focusOut="validateForm()" fontFamily="Arial" height="{lastNameInput.height}"
+				autoAdvance="true" defaultCharacter=""/>
+			<mx:Image source="@Embed('/../assets/info.gif')" toolTip="Required, format DD/MM/YYYY"/>
+		</mx:FormItem>
+		
+		<mx:FormItem label="{resourceManager.getString('DriverForm','firstName')}:">
+			<mx:TextInput id="firstNameInput" text="{driver.firstname}"
+				maxChars="30" restrict="^0-9"
+				focusOut="validateForm()"/>
+		</mx:FormItem>
+		
+		<mx:FormItem label="{resourceManager.getString('DriverForm','lastName')}:">
+			<mx:TextInput id="lastNameInput" text="{driver.lastname}" 
+				maxChars="30" restrict="^0-9"
+				focusOut="validateForm()"/>
+		</mx:FormItem>
+
+		<mx:RadioButtonGroup id="rbGender" selectedValue="{driver.gender}"/>
+		<s:HGroup x="4">
+			<mx:Label text="{resourceManager.getString('DriverForm','gender')}:"/>
+			<mx:RadioButton label="{resourceManager.getString('DriverForm','male')}" value="m" selected="true" groupName="rbGender"/>
+			<mx:RadioButton label="{resourceManager.getString('DriverForm','female')}" value="f" groupName="rbGender" />
+		</s:HGroup>
+		
+		<mx:RadioButtonGroup id="rbMaritalStatus" selectedValue="{driver.maritalstatus}"/>
+		<mx:HBox x="4">
+			<mx:Label text="{resourceManager.getString('DriverForm','maritalStatus')}:"/>
+			<mx:RadioButton label="{resourceManager.getString('DriverForm','single')}" value="single" groupName="rbMaritalStatus"/>
+			<mx:RadioButton label="{resourceManager.getString('DriverForm','married')}" value="married" selected="true" groupName="rbMaritalStatus" />
+		</mx:HBox>
+
+		<mx:RadioButtonGroup id="rbInsured" selectedValue="{driver.previnsured.toString()}"/>
+		<mx:HBox x="4" horizontalGap="0" borderVisible="true" borderStyle="solid">
+			<s:TextArea id="textAreaInsured" textFlow="{textFlowInsured}"
+						selectable="false" focusEnabled="false" focusThickness="0" verticalScrollPolicy="off" textAlign="left"										contentBackgroundAlpha="0.0"
+						borderVisible="false" heightInLines="2">
+			</s:TextArea>
+			<mx:VBox verticalGap="1">
+			  <mx:RadioButton label="{resourceManager.getString('DriverForm','yes')}" value="1" groupName="rbInsured"/> 
+			  <mx:RadioButton label="{resourceManager.getString('DriverForm','no')}" value="0" selected="true" groupName="rbInsured" />
+			</mx:VBox>
+		</mx:HBox>
+		
+		<mx:RadioButtonGroup id="rbTickets" selectedValue="{driver.ticketsaccidents.toString()}"/>
+		<mx:HBox x="4">
+			<mx:Label text="{resourceManager.getString('DriverForm','ticketsorAccidents')}:"/>
+			<mx:RadioButton label="{resourceManager.getString('DriverForm','yes')}" value="1" groupName="rbTickets" />
+			<mx:RadioButton label="{resourceManager.getString('DriverForm','no')}" value="0" selected="true" groupName="rbTickets" />
+		</mx:HBox>
+		
+		<mx:RadioButtonGroup id="rbDriver" selectedValue="{driver.isdriver.toString()}"/>
+		<mx:HBox x="4">
+			<mx:Label text="{resourceManager.getString('DriverForm','willspousebedriving')}:"/>
+			<mx:RadioButton label="{resourceManager.getString('DriverForm','yes')}" value="1" groupName="rbDriver" />
+			<mx:RadioButton label="{resourceManager.getString('DriverForm','no')}" value="0" selected="true" groupName="rbDriver" />
+		</mx:HBox>
+
+		<mx:RadioButtonGroup id="rbSpouse" selectedValue="{driver.relationship}"/>
+		<mx:HBox x="4">
+			<mx:Label text="{resourceManager.getString('DriverForm','thisDriveris')}:"/>
+			<mx:RadioButton label="{resourceManager.getString('DriverForm','mySpouse')}" value="spouse" selected="true" groupName="rbSpouse" />
+			<mx:RadioButton label="{resourceManager.getString('DriverForm','other')}" value="other" groupName="rbSpouse" />
+		</mx:HBox>
+
+	</mx:Form>
+</s:VGroup>
+
